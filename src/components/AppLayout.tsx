@@ -9,6 +9,7 @@ import { ApprovalPanel } from './ApprovalPanel'
 import { HistoryPanel } from './HistoryPanel'
 import { BorrowRequestModal } from './BorrowRequestModal'
 import { ReturnConfirmModal } from './ReturnConfirmModal'
+import { ComparePanel } from './ComparePanel'
 import type { Archive, CabinetSlot } from '../types'
 
 export function AppLayout() {
@@ -17,6 +18,7 @@ export function AppLayout() {
   const [selectedSlot, setSelectedSlot] = useState<CabinetSlot | null>(null)
   const [borrowOpen, setBorrowOpen] = useState(false)
   const [returnOpen, setReturnOpen] = useState(false)
+  const [compareOpen, setCompareOpen] = useState(false)
 
   const handleSlotClick = (slot: CabinetSlot, arc?: Archive) => {
     setSelectedSlot(slot)
@@ -69,6 +71,7 @@ export function AppLayout() {
                 archive={selectedArchive}
                 onBorrow={handleBorrow}
                 onReturn={handleReturn}
+                onOpenCompare={() => setCompareOpen(true)}
               />
               <ApprovalPanel onViewArchive={setSelectedArchive} />
             </div>
@@ -81,6 +84,7 @@ export function AppLayout() {
                   setSelectedSlot(slot || null)
                 }}
                 selectedId={selectedArchive?.id}
+                onOpenCompare={() => setCompareOpen(true)}
               />
               <HistoryPanel />
             </div>
@@ -96,6 +100,16 @@ export function AppLayout() {
           open={returnOpen}
           archive={selectedArchive}
           onClose={() => setReturnOpen(false)}
+        />
+        <ComparePanel
+          open={compareOpen}
+          onClose={() => setCompareOpen(false)}
+          onViewArchive={(a) => {
+            setSelectedArchive(a)
+            const slot = appState.slots.find((s) => s.id === a.slotId)
+            setSelectedSlot(slot || null)
+            setCompareOpen(false)
+          }}
         />
       </div>
     </AppStateContext.Provider>

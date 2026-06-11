@@ -95,3 +95,15 @@ export interface OverdueRecord {
   overdueDays: number
   resolved: boolean
 }
+
+export interface FavoriteItem {
+  archiveId: string
+  userId: string
+  addedAt: string
+}
+
+export interface CompareItem {
+  archiveId: string
+  userId: string
+  addedAt: string
+}

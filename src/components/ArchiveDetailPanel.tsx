@@ -8,9 +8,10 @@ interface Props {
   archive: Archive | null
   onBorrow: (archive: Archive) => void
   onReturn: (archive: Archive) => void
+  onOpenCompare?: () => void
 }
 
-export function ArchiveDetailPanel({ archive, onBorrow, onReturn }: Props) {
+export function ArchiveDetailPanel({ archive, onBorrow, onReturn, onOpenCompare }: Props) {
   const app = useApp()
   const user = app.currentUser
 
@@ -31,11 +32,37 @@ export function ArchiveDetailPanel({ archive, onBorrow, onReturn }: Props) {
   const activeBorrow = app.borrows.find(
     (b) => b.archiveId === archive.id && ['borrowed', 'overdue', 'approved', 'pending'].includes(b.status)
   )
+  const isFav = app.isFavorite(archive.id)
+  const inCompare = app.isInCompare(archive.id)
+  const compareCount = app.compare.filter((c) => c.userId === user?.id).length
+
+  const handleFavorite = () => {
+    app.toggleFavorite(archive.id)
+  }
+
+  const handleCompare = () => {
+    const result = app.toggleCompare(archive.id)
+    if (!result && !inCompare) {
+      alert('对比列表最多添加5个档案')
+    }
+  }
 
   return (
     <div className="bg-white rounded-lg border" data-testid="archive-detail">
       <div className="px-5 py-3 border-b flex items-center justify-between">
-        <h3 className="font-semibold text-gray-800">资料详情</h3>
+        <div className="flex items-center gap-2">
+          <h3 className="font-semibold text-gray-800">资料详情</h3>
+          <button
+            data-testid="btn-detail-favorite"
+            onClick={handleFavorite}
+            className={`text-xl transition-colors ${
+              isFav ? 'text-yellow-500' : 'text-gray-300 hover:text-yellow-400'
+            }`}
+            title={isFav ? '取消收藏' : '收藏'}
+          >
+            {isFav ? '★' : '☆'}
+          </button>
+        </div>
         <ClassificationBadge level={archive.classification} />
       </div>
       <div className="p-5 space-y-3">
@@ -123,6 +150,27 @@ export function ArchiveDetailPanel({ archive, onBorrow, onReturn }: Props) {
               ⚠ 该档案为{archive.classification === 'secret' ? '绝密' : '机密'}资料，借阅需<b>部门管理员</b>审批
             </div>
           )}
+          <div className="mt-3 flex gap-2">
+            <Button
+              variant="secondary"
+              size="sm"
+              onClick={handleCompare}
+              data-testid="btn-detail-compare"
+              className={inCompare ? 'bg-blue-50 text-blue-600 border-blue-300' : ''}
+            >
+              {inCompare ? '移出对比' : '加入对比'}
+            </Button>
+            {compareCount > 0 && inCompare && onOpenCompare && (
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={onOpenCompare}
+                data-testid="btn-detail-open-compare"
+              >
+                查看对比 ({compareCount})
+              </Button>
+            )}
+          </div>
         </div>
       </div>
     </div>

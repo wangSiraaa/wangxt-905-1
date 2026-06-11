@@ -298,5 +298,7 @@ export const STORAGE_KEYS = {
   BORROWS: 'ac_borrows',
   LOGS: 'ac_logs',
   OVERDUE: 'ac_overdue',
-  CURRENT_USER: 'ac_current_user'
+  CURRENT_USER: 'ac_current_user',
+  FAVORITES: 'ac_favorites',
+  COMPARE: 'ac_compare'
 }

@@ -5,6 +5,8 @@ import { ClassificationBadge, StatusBadge, RoleBadge, Button } from './UI'
 import { CLASSIFICATION_LABELS } from '../constants/permissions'
 import { canViewArchiveDetail } from '../utils/permissions'
 
+type ViewMode = 'all' | 'favorites'
+
 interface Props {
   onSelect: (archive: Archive) => void
   selectedId?: string | null
@@ -12,21 +14,39 @@ interface Props {
   onToggleOverdue?: (v: boolean) => void
 }
 
-export function ArchiveList({ onSelect, selectedId, filterOverdue = false, onToggleOverdue }: Props) {
+export function ArchiveList({ onSelect, selectedId, filterOverdue = false, onToggleOverdue, onOpenCompare }: Props & { onOpenCompare?: () => void }) {
   const app = useApp()
   const user = app.currentUser
   const [search, setSearch] = useState('')
   const [classificationFilter, setClassificationFilter] = useState<ClassificationLevel | 'all'>('all')
   const [statusFilter, setStatusFilter] = useState<'all' | 'borrowed' | 'available'>('all')
   const [onlyOverdue, setOnlyOverdue] = useState(filterOverdue)
+  const [viewMode, setViewMode] = useState<ViewMode>('all')
 
   const overdueUserIds = useMemo(
     () => new Set(app.overdue.filter((o) => !o.resolved).map((o) => o.userId)),
     [app.overdue]
   )
 
+  const compareCount = useMemo(() => {
+    if (!user) return 0
+    return app.compare.filter((c) => c.userId === user.id).length
+  }, [app.compare, user])
+
+  const favoriteCount = useMemo(() => {
+    if (!user) return 0
+    return app.favorites.filter((f) => f.userId === user.id).length
+  }, [app.favorites, user])
+
   const list = useMemo(() => {
     let data = app.archives.slice()
+
+    if (viewMode === 'favorites') {
+      const favIds = new Set(
+        app.favorites.filter((f) => f.userId === user?.id).map((f) => f.archiveId)
+      )
+      data = data.filter((a) => favIds.has(a.id))
+    }
 
     if (classificationFilter !== 'all') {
       data = data.filter((a) => a.classification === classificationFilter)
@@ -51,17 +71,73 @@ export function ArchiveList({ onSelect, selectedId, filterOverdue = false, onTog
       )
     }
     return data
-  }, [app.archives, app.borrows, classificationFilter, statusFilter, onlyOverdue, search, overdueUserIds, user])
+  }, [app.archives, app.borrows, app.favorites, classificationFilter, statusFilter, onlyOverdue, search, overdueUserIds, user, viewMode])
 
   const handleOverdueToggle = (v: boolean) => {
     setOnlyOverdue(v)
     onToggleOverdue?.(v)
   }
 
+  const handleFavoriteClick = (e: React.MouseEvent, archiveId: string) => {
+    e.stopPropagation()
+    app.toggleFavorite(archiveId)
+  }
+
+  const handleCompareClick = (e: React.MouseEvent, archiveId: string) => {
+    e.stopPropagation()
+    const result = app.toggleCompare(archiveId)
+    if (!result && !app.isInCompare(archiveId)) {
+      alert('对比列表最多添加5个档案')
+    }
+  }
+
+  const isEmptyState = viewMode === 'favorites' && favoriteCount === 0
+
   return (
     <div className="bg-white rounded-lg border" data-testid="archive-list">
       <div className="px-5 py-3 border-b">
-        <h3 className="font-semibold text-gray-800 mb-3">资料列表</h3>
+        <div className="flex items-center justify-between mb-3">
+          <h3 className="font-semibold text-gray-800">资料列表</h3>
+          {compareCount > 0 && (
+            <Button
+              size="sm"
+              variant="secondary"
+              onClick={onOpenCompare}
+              data-testid="btn-open-compare"
+            >
+              对比 ({compareCount})
+            </Button>
+          )}
+        </div>
+        <div className="flex border-b mb-3 -mx-5 px-5">
+          <button
+            data-testid="view-mode-all"
+            onClick={() => setViewMode('all')}
+            className={`px-3 py-1.5 text-sm transition-colors ${
+              viewMode === 'all'
+                ? 'text-blue-600 border-b-2 border-blue-600 font-medium'
+                : 'text-gray-600 hover:bg-gray-50'
+            }`}
+          >
+            全部
+          </button>
+          <button
+            data-testid="view-mode-favorites"
+            onClick={() => setViewMode('favorites')}
+            className={`px-3 py-1.5 text-sm transition-colors flex items-center gap-1 ${
+              viewMode === 'favorites'
+                ? 'text-blue-600 border-b-2 border-blue-600 font-medium'
+                : 'text-gray-600 hover:bg-gray-50'
+            }`}
+          >
+            收藏
+            {favoriteCount > 0 && (
+              <span className="bg-yellow-100 text-yellow-700 text-xs px-1.5 py-0.5 rounded-full">
+                {favoriteCount}
+              </span>
+            )}
+          </button>
+        </div>
         <div className="space-y-2">
           <input
             data-testid="search-input"
@@ -106,7 +182,13 @@ export function ArchiveList({ onSelect, selectedId, filterOverdue = false, onTog
         </div>
       </div>
       <div className="divide-y max-h-[500px] overflow-y-auto scrollbar-thin">
-        {list.length === 0 ? (
+        {isEmptyState ? (
+          <div className="p-8 text-center" data-testid="favorites-empty">
+            <div className="text-4xl mb-2">⭐</div>
+            <p className="text-gray-400 text-sm mb-2">暂无收藏的档案</p>
+            <p className="text-gray-400 text-xs">点击档案列表中的星标按钮可收藏档案</p>
+          </div>
+        ) : list.length === 0 ? (
           <div className="p-8 text-center text-gray-400 text-sm">无匹配档案</div>
         ) : (
           list.map((a) => {
@@ -114,6 +196,8 @@ export function ArchiveList({ onSelect, selectedId, filterOverdue = false, onTog
             const br = app.borrows.find(
               (b) => b.archiveId === a.id && ['borrowed', 'overdue', 'approved', 'pending'].includes(b.status)
             )
+            const isFav = app.isFavorite(a.id)
+            const inCompare = app.isInCompare(a.id)
             return (
               <div
                 key={a.id}
@@ -148,9 +232,33 @@ export function ArchiveList({ onSelect, selectedId, filterOverdue = false, onTog
                       )}
                     </div>
                   </div>
-                  {br && overdueUserIds.has(br.applicantId) && (
-                    <RoleBadge role="auditor" />
-                  )}
+                  <div className="flex flex-col items-end gap-1">
+                    <button
+                      data-testid={`btn-favorite-${a.id}`}
+                      onClick={(e) => handleFavoriteClick(e, a.id)}
+                      className={`text-lg transition-colors ${
+                        isFav ? 'text-yellow-500' : 'text-gray-300 hover:text-yellow-400'
+                      }`}
+                      title={isFav ? '取消收藏' : '收藏'}
+                    >
+                      {isFav ? '★' : '☆'}
+                    </button>
+                    <button
+                      data-testid={`btn-compare-${a.id}`}
+                      onClick={(e) => handleCompareClick(e, a.id)}
+                      className={`text-xs px-2 py-0.5 rounded transition-colors ${
+                        inCompare
+                          ? 'bg-blue-100 text-blue-700'
+                          : 'bg-gray-100 text-gray-500 hover:bg-gray-200'
+                      }`}
+                      title={inCompare ? '移出对比' : '加入对比'}
+                    >
+                      {inCompare ? '已对比' : '对比'}
+                    </button>
+                    {br && overdueUserIds.has(br.applicantId) && (
+                      <RoleBadge role="auditor" />
+                    )}
+                  </div>
                 </div>
               </div>
             )

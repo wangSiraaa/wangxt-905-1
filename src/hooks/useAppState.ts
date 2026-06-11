@@ -7,7 +7,9 @@ import type {
   BorrowRequest,
   OperationLog,
   OverdueRecord,
-  ClassificationLevel
+  ClassificationLevel,
+  FavoriteItem,
+  CompareItem
 } from '../types'
 import { store, initializeSeedData, resetAllData } from '../data/storage'
 import { seedUsers } from '../data/seed'
@@ -27,6 +29,8 @@ interface AppState {
   logs: OperationLog[]
   overdue: OverdueRecord[]
   currentUser: User | null
+  favorites: FavoriteItem[]
+  compare: CompareItem[]
 }
 
 export function useAppState() {
@@ -40,7 +44,9 @@ export function useAppState() {
       borrows: store.getBorrows(),
       logs: store.getLogs(),
       overdue: store.getOverdue(),
-      currentUser: store.getCurrentUser()
+      currentUser: store.getCurrentUser(),
+      favorites: store.getFavorites(),
+      compare: store.getCompare()
     }
   })
 
@@ -392,9 +398,122 @@ export function useAppState() {
       borrows: store.getBorrows(),
       logs: store.getLogs(),
       overdue: store.getOverdue(),
-      currentUser: store.getCurrentUser()
+      currentUser: store.getCurrentUser(),
+      favorites: store.getFavorites(),
+      compare: store.getCompare()
     })
   }, [])
+
+  const toggleFavorite = useCallback(
+    (archiveId: string): boolean => {
+      const user = state.currentUser
+      if (!user) return false
+
+      const favorites = store.getFavorites()
+      const existingIndex = favorites.findIndex(
+        (f) => f.archiveId === archiveId && f.userId === user.id
+      )
+
+      if (existingIndex >= 0) {
+        favorites.splice(existingIndex, 1)
+        store.setFavorites(favorites)
+        setState((s) => ({ ...s, favorites: [...favorites] }))
+        addOperationLog(user.id, user.name, 'REMOVE_FAVORITE', 'Archive', archiveId, '取消收藏档案')
+        return false
+      } else {
+        const item: FavoriteItem = {
+          archiveId,
+          userId: user.id,
+          addedAt: new Date().toISOString()
+        }
+        favorites.push(item)
+        store.setFavorites(favorites)
+        setState((s) => ({ ...s, favorites: [...favorites] }))
+        addOperationLog(user.id, user.name, 'ADD_FAVORITE', 'Archive', archiveId, '收藏档案')
+        return true
+      }
+    },
+    [state.currentUser, addOperationLog]
+  )
+
+  const isFavorite = useCallback(
+    (archiveId: string): boolean => {
+      const user = state.currentUser
+      if (!user) return false
+      return state.favorites.some((f) => f.archiveId === archiveId && f.userId === user.id)
+    },
+    [state.favorites, state.currentUser]
+  )
+
+  const toggleCompare = useCallback(
+    (archiveId: string): boolean => {
+      const user = state.currentUser
+      if (!user) return false
+
+      const compare = store.getCompare()
+      const existingIndex = compare.findIndex(
+        (c) => c.archiveId === archiveId && c.userId === user.id
+      )
+
+      if (existingIndex >= 0) {
+        compare.splice(existingIndex, 1)
+        store.setCompare(compare)
+        setState((s) => ({ ...s, compare: [...compare] }))
+        addOperationLog(user.id, user.name, 'REMOVE_COMPARE', 'Archive', archiveId, '移出对比')
+        return false
+      } else {
+        if (compare.filter((c) => c.userId === user.id).length >= 5) {
+          return false
+        }
+        const item: CompareItem = {
+          archiveId,
+          userId: user.id,
+          addedAt: new Date().toISOString()
+        }
+        compare.push(item)
+        store.setCompare(compare)
+        setState((s) => ({ ...s, compare: [...compare] }))
+        addOperationLog(user.id, user.name, 'ADD_COMPARE', 'Archive', archiveId, '加入对比')
+        return true
+      }
+    },
+    [state.currentUser, addOperationLog]
+  )
+
+  const isInCompare = useCallback(
+    (archiveId: string): boolean => {
+      const user = state.currentUser
+      if (!user) return false
+      return state.compare.some((c) => c.archiveId === archiveId && c.userId === user.id)
+    },
+    [state.compare, state.currentUser]
+  )
+
+  const getCompareList = useCallback((): Archive[] => {
+    const user = state.currentUser
+    if (!user) return []
+    const userCompare = state.compare.filter((c) => c.userId === user.id)
+    return userCompare
+      .map((c) => state.archives.find((a) => a.id === c.archiveId))
+      .filter((a): a is Archive => a !== undefined)
+  }, [state.compare, state.archives, state.currentUser])
+
+  const clearCompare = useCallback((): void => {
+    const user = state.currentUser
+    if (!user) return
+    const compare = store.getCompare().filter((c) => c.userId !== user.id)
+    store.setCompare(compare)
+    setState((s) => ({ ...s, compare: [...compare] }))
+  }, [state.currentUser])
+
+  const getFavoriteList = useCallback((): Archive[] => {
+    const user = state.currentUser
+    if (!user) return []
+    const userFavorites = state.favorites.filter((f) => f.userId === user.id)
+    return userFavorites
+      .map((f) => state.archives.find((a) => a.id === f.archiveId))
+      .filter((a): a is Archive => a !== undefined)
+  }, [state.favorites, state.archives, state.currentUser])
 
   return useMemo(
     () => ({
@@ -409,7 +528,14 @@ export function useAppState() {
       getSlotsByCabinet,
       getArchiveAtSlot,
       addOperationLog,
-      reset
+      reset,
+      toggleFavorite,
+      isFavorite,
+      toggleCompare,
+      isInCompare,
+      getCompareList,
+      clearCompare,
+      getFavoriteList
     }),
     [
       state,
@@ -423,7 +549,14 @@ export function useAppState() {
       getSlotsByCabinet,
       getArchiveAtSlot,
       addOperationLog,
-      reset
+      reset,
+      toggleFavorite,
+      isFavorite,
+      toggleCompare,
+      isInCompare,
+      getCompareList,
+      clearCompare,
+      getFavoriteList
     ]
   )
 }

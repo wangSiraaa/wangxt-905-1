@@ -1,7 +1,8 @@
 import { useMemo, useState } from 'react'
 import { useApp } from '../hooks/useApp'
-import { StatusBadge, RoleBadge } from './UI'
+import { StatusBadge, RoleBadge, Button } from './UI'
 import { formatDateTime } from '../utils/date'
+import type { BorrowRequest } from '../types'
 
 type TabType = 'my' | 'all' | 'overdue' | 'logs'
 
@@ -9,6 +10,7 @@ export function HistoryPanel() {
   const app = useApp()
   const user = app.currentUser
   const [tab, setTab] = useState<TabType>('my')
+  const [expandedId, setExpandedId] = useState<string | null>(null)
 
   const myBorrows = useMemo(
     () => (user ? app.borrows.filter((b) => b.applicantId === user.id) : []),
@@ -65,22 +67,66 @@ export function HistoryPanel() {
             ) : (
               myBorrows.map((b) => {
                 const arc = app.archives.find((a) => a.id === b.archiveId)
+                const isExpanded = expandedId === b.id
                 return (
-                  <div key={b.id} className="p-3 text-sm">
-                    <div className="flex items-center justify-between">
-                      <div>
-                        <span className="font-mono text-xs text-gray-500">{arc?.code}</span>
-                        <span className="ml-2 font-medium">{arc?.maskedTitle}</span>
+                  <div key={b.id} className="text-sm" data-testid={`history-row-${b.id}`}>
+                    <div
+                      className="p-3 cursor-pointer hover:bg-gray-50 transition-colors"
+                      onClick={() => setExpandedId(isExpanded ? null : b.id)}
+                    >
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-2">
+                          <span className="text-gray-400 text-xs">{isExpanded ? '▼' : '▶'}</span>
+                          <div>
+                            <span className="font-mono text-xs text-gray-500">{arc?.code}</span>
+                            <span className="ml-2 font-medium">{arc?.maskedTitle}</span>
+                          </div>
+                        </div>
+                        <StatusBadge status={b.status} />
                       </div>
-                      <StatusBadge status={b.status} />
+                      <div className="text-xs text-gray-500 mt-1 ml-4">
+                        提交于 {formatDateTime(b.createdAt)} · 应还 {b.expectedReturnDate}
+                        {b.actualReturnDate && ` · 实还 ${b.actualReturnDate}`}
+                      </div>
                     </div>
-                    <div className="text-xs text-gray-500 mt-1">
-                      提交于 {formatDateTime(b.createdAt)} · 应还 {b.expectedReturnDate}
-                      {b.actualReturnDate && ` · 实还 ${b.actualReturnDate}`}
-                    </div>
-                    {b.integrityCheck && (
-                      <div className="text-xs text-gray-600 mt-1 bg-amber-50 p-1.5 rounded">
-                        归还完整性：{b.integrityCheck}
+                    {isExpanded && (
+                      <div className="px-3 pb-3 ml-4 space-y-2 border-l-2 border-gray-200 ml-6" data-testid={`history-detail-${b.id}`}>
+                        <div className="text-xs">
+                          <span className="text-gray-500">申请原因：</span>
+                          <span className="text-gray-700" data-testid={`reason-${b.id}`}>{b.reason}</span>
+                        </div>
+                        {b.approverName && (
+                          <div className="text-xs">
+                            <span className="text-gray-500">审批人：</span>
+                            <span className="text-gray-700">{b.approverName}</span>
+                            {b.approvalDate && (
+                              <span className="text-gray-400 ml-2">于 {formatDateTime(b.approvalDate)}</span>
+                            )}
+                          </div>
+                        )}
+                        {b.approvalComment && (
+                          <div className="text-xs bg-gray-50 p-2 rounded">
+                            <span className="text-gray-500">审批意见：</span>
+                            <span className={`${b.status === 'rejected' ? 'text-red-600' : 'text-gray-700'}`} data-testid={`approval-comment-${b.id}`}>
+                              {b.approvalComment}
+                            </span>
+                          </div>
+                        )}
+                        {b.status === 'rejected' && (
+                          <div className="text-xs bg-red-50 text-red-600 p-2 rounded" data-testid={`reject-reason-${b.id}`}>
+                            <span className="font-medium">拒绝原因：</span>
+                            {b.approvalComment || '未填写具体原因'}
+                          </div>
+                        )}
+                        {b.integrityCheck && (
+                          <div className="text-xs bg-amber-50 p-2 rounded">
+                            <span className="text-gray-500">归还完整性：</span>
+                            <span className="text-gray-700">{b.integrityCheck}</span>
+                          </div>
+                        )}
+                        <div className="text-xs text-gray-400">
+                          申请单号：{b.id}
+                        </div>
                       </div>
                     )}
                   </div>
@@ -94,20 +140,69 @@ export function HistoryPanel() {
           <div className="divide-y">
             {allBorrows.map((b) => {
               const arc = app.archives.find((a) => a.id === b.archiveId)
+              const isExpanded = expandedId === b.id
               return (
-                <div key={b.id} className="p-3 text-sm">
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <span className="font-mono text-xs text-gray-500">{arc?.code}</span>
-                      <span className="ml-2 font-medium">{arc?.maskedTitle}</span>
+                <div key={b.id} className="text-sm" data-testid={`history-all-row-${b.id}`}>
+                  <div
+                    className="p-3 cursor-pointer hover:bg-gray-50 transition-colors"
+                    onClick={() => setExpandedId(isExpanded ? null : b.id)}
+                  >
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <span className="text-gray-400 text-xs">{isExpanded ? '▼' : '▶'}</span>
+                        <div>
+                          <span className="font-mono text-xs text-gray-500">{arc?.code}</span>
+                          <span className="ml-2 font-medium">{arc?.maskedTitle}</span>
+                        </div>
+                      </div>
+                      <StatusBadge status={b.status} />
                     </div>
-                    <StatusBadge status={b.status} />
+                    <div className="text-xs text-gray-500 mt-1 ml-4">
+                      申请人：{b.applicantName}
+                      {b.approverName && ` · 审批：${b.approverName}`}
+                      {' · '}应还 {b.expectedReturnDate}
+                    </div>
                   </div>
-                  <div className="text-xs text-gray-500 mt-1">
-                    申请人：{b.applicantName}
-                    {b.approverName && ` · 审批：${b.approverName}`}
-                    {' · '}应还 {b.expectedReturnDate}
-                  </div>
+                  {isExpanded && (
+                    <div className="px-3 pb-3 ml-4 space-y-2 border-l-2 border-gray-200 ml-6" data-testid={`history-all-detail-${b.id}`}>
+                      <div className="text-xs">
+                        <span className="text-gray-500">申请原因：</span>
+                        <span className="text-gray-700">{b.reason}</span>
+                      </div>
+                      {b.approverName && (
+                        <div className="text-xs">
+                          <span className="text-gray-500">审批人：</span>
+                          <span className="text-gray-700">{b.approverName}</span>
+                          {b.approvalDate && (
+                            <span className="text-gray-400 ml-2">于 {formatDateTime(b.approvalDate)}</span>
+                          )}
+                        </div>
+                      )}
+                      {b.approvalComment && (
+                        <div className="text-xs bg-gray-50 p-2 rounded">
+                          <span className="text-gray-500">审批意见：</span>
+                          <span className={`${b.status === 'rejected' ? 'text-red-600' : 'text-gray-700'}`}>
+                            {b.approvalComment}
+                          </span>
+                        </div>
+                      )}
+                      {b.status === 'rejected' && (
+                        <div className="text-xs bg-red-50 text-red-600 p-2 rounded">
+                          <span className="font-medium">拒绝原因：</span>
+                          {b.approvalComment || '未填写具体原因'}
+                        </div>
+                      )}
+                      {b.integrityCheck && (
+                        <div className="text-xs bg-amber-50 p-2 rounded">
+                          <span className="text-gray-500">归还完整性：</span>
+                          <span className="text-gray-700">{b.integrityCheck}</span>
+                        </div>
+                      )}
+                      <div className="text-xs text-gray-400">
+                        申请单号：{b.id}
+                      </div>
+                    </div>
+                  )}
                 </div>
               )
             })}

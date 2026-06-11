@@ -5,7 +5,9 @@ import type {
   Archive,
   BorrowRequest,
   OperationLog,
-  OverdueRecord
+  OverdueRecord,
+  FavoriteItem,
+  CompareItem
 } from '../types'
 import {
   seedUsers,
@@ -103,7 +105,13 @@ export const store = {
   setOverdue: (v: OverdueRecord[]) => write(STORAGE_KEYS.OVERDUE, v),
 
   getCurrentUser: (): User | null => readOr<User | null>(STORAGE_KEYS.CURRENT_USER, null),
-  setCurrentUser: (v: User | null) => write(STORAGE_KEYS.CURRENT_USER, v)
+  setCurrentUser: (v: User | null) => write(STORAGE_KEYS.CURRENT_USER, v),
+
+  getFavorites: (): FavoriteItem[] => readOr(STORAGE_KEYS.FAVORITES, []),
+  setFavorites: (v: FavoriteItem[]) => write(STORAGE_KEYS.FAVORITES, v),
+
+  getCompare: (): CompareItem[] => readOr(STORAGE_KEYS.COMPARE, []),
+  setCompare: (v: CompareItem[]) => write(STORAGE_KEYS.COMPARE, v)
 }
 
 export function clearAllForTest(): void {
