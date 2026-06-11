@@ -1,0 +1,40 @@
+version: '3.8'
+
+services:
+  web:
+    build:
+      context: .
+      dockerfile: Dockerfile.dev
+    container_name: archive-cabinet-web
+    ports:
+      - "5173:5173"
+    volumes:
+      - .:/app
+      - /app/node_modules
+    environment:
+      - NODE_ENV=development
+    command: npm run dev
+
+  preview:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: archive-cabinet-preview
+    ports:
+      - "5174:5173"
+    environment:
+      - NODE_ENV=production
+    profiles:
+      - preview
+
+  test:
+    build:
+      context: .
+      dockerfile: Dockerfile.dev
+    container_name: archive-cabinet-test
+    volumes:
+      - .:/app
+      - /app/node_modules
+    command: npm run test
+    profiles:
+      - test
