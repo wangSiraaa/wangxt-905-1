@@ -30,3 +30,13 @@ if (typeof globalThis.localStorage === 'undefined') {
     configurable: true
   })
 }
+
+Object.defineProperty(globalThis, 'alert', {
+  value: vi.fn(),
+  writable: true,
+  configurable: true
+})
+
+beforeEach(() => {
+  vi.clearAllMocks()
+})

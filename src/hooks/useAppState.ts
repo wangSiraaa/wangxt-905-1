@@ -203,6 +203,37 @@ export function useAppState() {
         return { ok: false, error: needsDepartmentApproval(archive) ? '涉密/机密资料借阅需由部门管理员审批' : '您无审批权限' }
       }
 
+      const isClassified = needsDepartmentApproval(archive)
+      if (approve && isClassified) {
+        const applicantOverdue = store.getOverdue().some(
+          (o) => o.userId === req.applicantId && !o.resolved
+        )
+        if (applicantOverdue) {
+          const errMsg = `申请人 ${req.applicantName} 存在未解决的逾期记录，涉密/机密资料借阅不予批准`
+          const rejectComment = comment || errMsg
+          const rejected: BorrowRequest = {
+            ...req,
+            status: 'rejected',
+            approverId: user.id,
+            approverName: user.name,
+            approvalComment: rejectComment,
+            approvalDate: new Date().toISOString()
+          }
+          borrows[idx] = rejected
+          store.setBorrows(borrows)
+          setState((s) => ({ ...s, borrows: [...borrows] }))
+          addOperationLog(
+            user.id,
+            user.name,
+            'REJECT_OVERDUE_BLOCK',
+            'BorrowRequest',
+            req.id,
+            `审批时拦截：${req.applicantName} 有逾期记录，拒绝批准 ${archive.code} 涉密借阅`
+          )
+          return { ok: false, error: errMsg }
+        }
+      }
+
       const updated: BorrowRequest = {
         ...req,
         status: approve ? 'approved' : 'rejected',

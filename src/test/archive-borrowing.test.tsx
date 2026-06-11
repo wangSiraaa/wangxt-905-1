@@ -298,4 +298,191 @@ describe('档案柜位借阅系统 - 核心业务场景验证', () => {
       })
     })
   })
+
+  describe('场景4：审批阶段逾期拦截回归验证', () => {
+    it('部门管理员批准李借阅的机密申请（br-3）时被拦截，申请变为拒绝状态', async () => {
+      renderApp()
+      await act(async () => {})
+
+      selectRole('user-4')
+
+      await waitFor(() => {
+        expect(screen.getByTestId('approval-panel')).toBeInTheDocument()
+      })
+
+      const pendingRows = screen.getAllByTestId(/^approval-row-/)
+      expect(pendingRows.length).toBeGreaterThan(0)
+
+      const br3Row = screen.getByTestId('approval-row-br-3')
+      expect(br3Row).toBeInTheDocument()
+      expect(br3Row.textContent).toContain('李借阅')
+      expect(br3Row.textContent).toContain('机密')
+
+      const approveBtn = screen.getByTestId('btn-approve-br-3')
+      fireEvent.click(approveBtn)
+
+      await waitFor(() => {
+        expect(screen.queryByTestId('approval-row-br-3')).not.toBeInTheDocument()
+      })
+
+      const historyTab = screen.getByTestId('history-tab-all')
+      fireEvent.click(historyTab)
+
+      await waitFor(() => {
+        const allRecords = screen.getAllByText(/DOC-2024-003/)
+        expect(allRecords.length).toBeGreaterThan(0)
+      })
+
+      const rejectedBadges = screen.getAllByText('已拒绝')
+      expect(rejectedBadges.length).toBeGreaterThan(0)
+    })
+
+    it('涉密审批被拒绝后，档案仍在柜位（isBorrowed=false）', async () => {
+      renderApp()
+      await act(async () => {})
+
+      selectRole('user-4')
+
+      await waitFor(() => {
+        expect(screen.getByTestId('btn-approve-br-3')).toBeInTheDocument()
+      })
+      fireEvent.click(screen.getByTestId('btn-approve-br-3'))
+
+      await waitFor(() => {
+        expect(screen.queryByTestId('approval-row-br-3')).not.toBeInTheDocument()
+      })
+
+      selectRole('user-2')
+      await waitFor(() => {
+        expect(screen.getByTestId('archive-row-arc-3')).toBeInTheDocument()
+      })
+      fireEvent.click(screen.getByTestId('archive-row-arc-3'))
+
+      await waitFor(() => {
+        expect(screen.getByTestId('btn-borrow')).toBeInTheDocument()
+      })
+    })
+
+    it('非涉密资料审批不检查逾期，可正常批准', async () => {
+      renderApp()
+      await act(async () => {})
+
+      selectRole('user-3')
+      await waitFor(() => {
+        expect(screen.getByTestId('archive-row-arc-1')).toBeInTheDocument()
+      })
+      fireEvent.click(screen.getByTestId('archive-row-arc-1'))
+      await waitFor(() => {
+        expect(screen.getByTestId('btn-borrow')).toBeInTheDocument()
+      })
+      fireEvent.click(screen.getByTestId('btn-borrow'))
+      await waitFor(() => {
+        expect(screen.getByTestId('borrow-form')).toBeInTheDocument()
+      })
+      fireEvent.change(screen.getByTestId('borrow-reason'), {
+        target: { value: '参考公开材料' }
+      })
+      fireEvent.change(screen.getByTestId('borrow-date'), {
+        target: { value: '2026-07-10' }
+      })
+      fireEvent.click(screen.getByText('提交申请'))
+      await waitFor(() => {
+        expect(screen.queryByTestId('borrow-form')).not.toBeInTheDocument()
+      })
+
+      selectRole('user-1')
+      await waitFor(() => {
+        expect(screen.getByTestId('approval-panel')).toBeInTheDocument()
+      })
+
+      const approveBtns = screen.getAllByTestId(/^btn-approve-/)
+      const publicApproveBtn = approveBtns.find((btn) => {
+        const row = btn.closest('[data-testid^="approval-row-"]')
+        return row && row.textContent?.includes('公开')
+      })
+      expect(publicApproveBtn).toBeDefined()
+      fireEvent.click(publicApproveBtn!)
+
+      await waitFor(() => {
+        expect(screen.getAllByText('借阅中').length).toBeGreaterThan(0)
+      })
+    })
+
+    it('无逾期的正常申请人涉密申请可正常通过审批', async () => {
+      renderApp()
+      await act(async () => {})
+
+      selectRole('user-3')
+      await waitFor(() => {
+        expect(screen.getByTestId('archive-row-arc-4')).toBeInTheDocument()
+      })
+      fireEvent.click(screen.getByTestId('archive-row-arc-4'))
+      await waitFor(() => {
+        expect(screen.getByTestId('btn-borrow')).toBeInTheDocument()
+      })
+      fireEvent.click(screen.getByTestId('btn-borrow'))
+      await waitFor(() => {
+        expect(screen.getByTestId('borrow-form')).toBeInTheDocument()
+      })
+      expect(screen.queryByTestId('overdue-warning')).not.toBeInTheDocument()
+      fireEvent.change(screen.getByTestId('borrow-reason'), {
+        target: { value: '算法研发参考' }
+      })
+      fireEvent.change(screen.getByTestId('borrow-date'), {
+        target: { value: '2026-07-15' }
+      })
+      fireEvent.click(screen.getByText('提交申请'))
+      await waitFor(() => {
+        expect(screen.queryByTestId('borrow-form')).not.toBeInTheDocument()
+      })
+
+      selectRole('user-4')
+      await waitFor(() => {
+        expect(screen.getByTestId('approval-panel')).toBeInTheDocument()
+      })
+
+      const pendingRows = screen.getAllByTestId(/^approval-row-/)
+      const targetRow = pendingRows.find((r) => r.textContent?.includes('王借阅') && r.textContent?.includes('绝密'))
+      expect(targetRow).toBeDefined()
+
+      const rowId = targetRow!.getAttribute('data-testid')
+      const requestId = rowId!.replace('approval-row-', '')
+
+      const approveBtn = screen.getByTestId(`btn-approve-${requestId}`)
+      fireEvent.click(approveBtn)
+
+      await waitFor(() => {
+        expect(screen.queryByTestId(rowId!)).not.toBeInTheDocument()
+      })
+
+      const historyTab = screen.getByTestId('history-tab-all')
+      fireEvent.click(historyTab)
+      await waitFor(() => {
+        expect(screen.getAllByText('借阅中').length).toBeGreaterThan(0)
+      })
+    })
+
+    it('审批逾期拦截会生成操作日志记录', async () => {
+      renderApp()
+      await act(async () => {})
+
+      selectRole('user-4')
+      await waitFor(() => {
+        expect(screen.getByTestId('btn-approve-br-3')).toBeInTheDocument()
+      })
+      fireEvent.click(screen.getByTestId('btn-approve-br-3'))
+
+      await waitFor(() => {
+        expect(screen.queryByTestId('approval-row-br-3')).not.toBeInTheDocument()
+      })
+
+      const logsTab = screen.getByTestId('history-tab-logs')
+      fireEvent.click(logsTab)
+
+      await waitFor(() => {
+        const blockLogs = screen.getAllByText(/逾期记录/)
+        expect(blockLogs.length).toBeGreaterThan(0)
+      })
+    })
+  })
 })
